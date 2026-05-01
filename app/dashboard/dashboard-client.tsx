@@ -413,6 +413,9 @@ export function DashboardClient({
             <p className="mt-1 text-sm text-blue-200/60">
               <span className="font-medium text-blue-100">{profileName || userEmail}</span>
             </p>
+            <p className="mt-1 text-xs text-blue-300/50">
+              Telegram reminders: {telegramId.trim() ? "connected" : "not connected"} (Settings)
+            </p>
             <p className="mt-1 text-xs text-blue-300/40">
               {scheduleDate} ({calendarTzLabel})
             </p>
