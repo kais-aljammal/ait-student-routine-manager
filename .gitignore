@@ -41,3 +41,16 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# local / private (keep on disk, not in the public repo)
+PRD.md
+PRD*.md
+*HANDOFF*
+*handoff*
+poster.html
+archive/
+archive.js
+scripts/md-to-docx.js
+generate_tree_image.py
+rebalanced-tree.*
+*.docx

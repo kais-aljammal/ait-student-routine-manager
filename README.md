@@ -84,7 +84,7 @@ See `.env.example` for the full list and descriptions.
 - `components/` - Shared UI components
 - `lib/` - Domain logic (date, schedule parsing/sanitizing, provider integration)
 - `supabase/` - SQL migrations and Supabase-related setup
-- `scripts/` - Utility scripts (docs tooling, smoke helpers)
+- `scripts/` - Utility scripts (e.g. smoke tests)
 
 ## Troubleshooting
 - **Signed up but no verification email / can sign in immediately:** In Supabase → **Authentication** → **Providers** → **Email**, check **Confirm email**. If it is **off**, Supabase returns a session on signup and the app sends you straight to the dashboard (no email). Turn **Confirm email** on for production if you require verification; configure SMTP or use Supabase’s mailer, and add your site URL under **Authentication** → **URL configuration**.

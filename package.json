@@ -16,9 +16,7 @@
     "@supabase/supabase-js": "^2.49.4",
     "date-fns": "^4.2.1",
     "date-fns-tz": "^3.2.0",
-    "docx": "^9.6.1",
     "groq-sdk": "^1.1.2",
-    "marked": "^18.0.2",
     "next": "^15.5.15",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
