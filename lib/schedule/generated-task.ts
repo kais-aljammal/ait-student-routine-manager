@@ -1,3 +1,5 @@
+import { normalizeTimestamp } from "@/lib/schedule/timestamp";
+
 export type TaskCategory = "class" | "study" | "life";
 
 export type GeneratedTaskInput = {
@@ -40,7 +42,6 @@ function normalizeCategory(v: unknown): TaskCategory {
 }
 
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-const timeOnlyRe = /^\d{2}:\d{2}$/;
 
 function normalizeScheduleDate(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -54,29 +55,10 @@ function normalizeScheduleDate(v: unknown): string | null {
   return null;
 }
 
-function normalizeTimestamp(v: unknown, scheduleDate: string): string | null {
-  if (typeof v !== "string") return null;
-  const raw = v.trim();
-  if (!raw) return null;
-
-  if (timeOnlyRe.test(raw)) {
-    // Append Z so Date.parse interprets as UTC (consistent with day-plan.ts toIsoUtc)
-    const parsed = Date.parse(`${scheduleDate}T${raw}:00Z`);
-    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-  }
-
-  let isoCandidate = raw.includes(" ") ? raw.replace(" ", "T") : raw;
-  // Ensure UTC interpretation if no timezone indicator present
-  if (!isoCandidate.endsWith("Z") && !isoCandidate.includes("+") && !/\d{2}:\d{2}:\d{2}-/.test(isoCandidate)) {
-    isoCandidate += "Z";
-  }
-  const parsed = Date.parse(isoCandidate);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
-}
-
 export function parseAndValidateGeneratedTasks(
   raw: unknown,
   expectedScheduleDate: string,
+  timezone: string,
 ): GeneratedTaskInput[] {
   if (!Array.isArray(raw)) {
     throw new Error("Model output is not a JSON array");
@@ -95,8 +77,16 @@ export function parseAndValidateGeneratedTasks(
     if (typeof starts_at !== "string" || typeof ends_at !== "string") {
       throw new Error("starts_at and ends_at must be ISO 8601 strings");
     }
-    const normalizedStart = normalizeTimestamp(starts_at, expectedScheduleDate);
-    const normalizedEnd = normalizeTimestamp(ends_at, expectedScheduleDate);
+    const normalizedStart = normalizeTimestamp(
+      starts_at,
+      expectedScheduleDate,
+      timezone,
+    );
+    const normalizedEnd = normalizeTimestamp(
+      ends_at,
+      expectedScheduleDate,
+      timezone,
+    );
     if (!normalizedStart || !normalizedEnd) {
       throw new Error("Invalid ISO timestamps in task");
     }

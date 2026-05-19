@@ -1,6 +1,8 @@
 // Generates or rebuilds a user's daily routine tasks from saved constraints or a day plan.
 import { createClient } from "@/lib/supabase/server";
+import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { getTodayDateStringInTimeZone } from "@/lib/date";
+import { isValidCalendarDate } from "@/lib/utils/date";
 import {
   extractJsonArrayFromModelText,
   parseAndValidateGeneratedTasks,
@@ -40,6 +42,10 @@ function countAutoFilledTitles(before: unknown, after: unknown): number {
 }
 
 function getTimeoutMs(provider: ProviderResult["provider"]): number {
+  const override = Number(process.env.LLM_PROVIDER_TIMEOUT_MS);
+  if (Number.isFinite(override) && override > 0) {
+    return override;
+  }
   if (provider === "claude") return 25_000;
   if (provider === "gemini") return 25_000;
   if (provider === "openrouter") return 20_000;
@@ -199,25 +205,38 @@ export async function POST(request: Request) {
       body = {};
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("timezone")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError || !profile) {
+    const ensured = await ensureUserProfile(supabase, user);
+    if (!ensured.profile) {
+      console.error(
+        JSON.stringify({
+          route: "generate-schedule",
+          errorCode: "PROFILE_ENSURE_FAILED",
+          userId: user.id,
+          message: ensured.error,
+        }),
+      );
       return NextResponse.json(
         { error: "Profile not found" },
         { status: 400 },
       );
     }
 
-    const timeZone = profile.timezone || "UTC";
-    const scheduleDate =
-      typeof body.schedule_date === "string" &&
-        /^\d{4}-\d{2}-\d{2}$/.test(body.schedule_date)
-        ? body.schedule_date
-        : getTodayDateStringInTimeZone(timeZone);
+    const timeZone = ensured.profile.timezone || "UTC";
+    const rawSchedule = body.schedule_date;
+    let scheduleDate: string;
+    if (rawSchedule === undefined) {
+      scheduleDate = getTodayDateStringInTimeZone(timeZone);
+    } else if (
+      typeof rawSchedule === "string" &&
+      isValidCalendarDate(rawSchedule.trim())
+    ) {
+      scheduleDate = rawSchedule.trim();
+    } else {
+      return NextResponse.json(
+        { error: "schedule_date must be YYYY-MM-DD when provided" },
+        { status: 400 },
+      );
+    }
 
     const dailyLimitRaw = process.env.FREE_DAILY_GENERATION_LIMIT ?? "20";
     const dailyLimit = Number(dailyLimitRaw);
@@ -335,7 +354,11 @@ export async function POST(request: Request) {
             const parsed = extractJsonArrayFromModelText(result.text);
             const sanitized = sanitizeGeneratedTasks(parsed, scheduleDate);
             autoFilledTitleRepairs += countAutoFilledTitles(parsed, sanitized);
-            const validated = parseAndValidateGeneratedTasks(sanitized, scheduleDate);
+            const validated = parseAndValidateGeneratedTasks(
+              sanitized,
+              scheduleDate,
+              timeZone,
+            );
             tasks = validated;
           } catch {
             const repairedText = await repairJsonWithProvider(
@@ -348,7 +371,11 @@ export async function POST(request: Request) {
               repairedParsed,
               repairedSanitized,
             );
-            const validated = parseAndValidateGeneratedTasks(repairedSanitized, scheduleDate);
+            const validated = parseAndValidateGeneratedTasks(
+              repairedSanitized,
+              scheduleDate,
+              timeZone,
+            );
             tasks = validated;
             providerErrors.push(
               `${provider.name}: initial JSON invalid, repaired successfully`,
@@ -430,6 +457,13 @@ export async function POST(request: Request) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Internal error";
+    console.error(
+      JSON.stringify({
+        route: "generate-schedule",
+        errorCode: "UNHANDLED",
+        message,
+      }),
+    );
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

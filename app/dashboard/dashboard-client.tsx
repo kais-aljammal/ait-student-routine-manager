@@ -11,6 +11,7 @@ import {
   getTomorrowDate,
   isValidScheduleDate,
 } from "@/lib/dashboard/date-selection";
+import { isTaskMissed } from "@/lib/dashboard/task-status";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LogoutButton } from "./logout-button";
@@ -130,6 +131,8 @@ export function DashboardClient({
   const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
   const [telegramLoading, setTelegramLoading] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const scheduleDate = selectedDate;
   useEffect(() => {
@@ -244,39 +247,60 @@ export function DashboardClient({
   async function loadTasksForDate(force = false) {
     if (!isValidScheduleDate(scheduleDate)) {
       setTasks([]);
+      setLoadError(null);
       setTasksLoading(false);
       return;
     }
     if (!force) {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
-        const parsed = normalizeTasks(JSON.parse(cached));
-        // Don't trust empty cache — always verify with server
-        if (parsed.length > 0) {
-          setTasks(parsed);
-          setTasksLoading(false);
-          return;
+        try {
+          const parsed = normalizeTasks(JSON.parse(cached));
+          // Don't trust empty cache — always verify with server
+          if (parsed.length > 0) {
+            setTasks(parsed);
+            setLoadError(null);
+            setTasksLoading(false);
+            return;
+          }
+        } catch {
+          sessionStorage.removeItem(cacheKey);
         }
       }
     }
     setTasksLoading(true);
-    const res = await fetch(`/api/tasks?schedule_date=${scheduleDate}`, {
-      method: "GET",
-    });
-    const data = await parseApiResponse<{ error?: string; tasks?: unknown }>(res);
-    if (!res.ok) {
-      throw new Error(mapErrorMessage(data.error, res.status, "Failed to load tasks."));
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/tasks?schedule_date=${scheduleDate}`, {
+        method: "GET",
+      });
+      const data = await parseApiResponse<{ error?: string; tasks?: unknown }>(res);
+      if (!res.ok) {
+        throw new Error(
+          mapErrorMessage(data.error, res.status, "Failed to load tasks."),
+        );
+      }
+      const normalized = normalizeTasks(data.tasks);
+      sessionStorage.setItem(cacheKey, JSON.stringify(normalized));
+      setTasks(normalized);
+    } catch {
+      setLoadError("Failed to load tasks. Please refresh.");
+    } finally {
+      setTasksLoading(false);
     }
-    const normalized = normalizeTasks(data.tasks);
-    sessionStorage.setItem(cacheKey, JSON.stringify(normalized));
-    setTasks(normalized);
-    setTasksLoading(false);
   }
 
   useEffect(() => {
     void loadTasksForDate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleDate]);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (scheduleDate !== calendarToday) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [scheduleDate, calendarToday]);
 
   async function generateRoutine() {
     setGenerateError(null);
@@ -521,10 +545,14 @@ export function DashboardClient({
             </div>
             <div className="flex gap-2">
               <Link
-                href={`/dashboard/constraints?date=${scheduleDate}`}
+                href={
+                  tasks.length > 0
+                    ? `/dashboard/constraints?date=${scheduleDate}&edit=1`
+                    : "/dashboard/constraints"
+                }
                 className="flex-1 flex items-center justify-center rounded-xl bg-slate-800/80 border border-blue-900/50 py-2.5 text-xs font-semibold text-blue-100 hover:bg-slate-700 hover:text-white transition-colors"
               >
-                ✎ Constraints
+                {tasks.length > 0 ? "✎ Edit" : "✎ Setup"}
               </Link>
               <button
                 suppressHydrationWarning
@@ -542,18 +570,42 @@ export function DashboardClient({
 
         {/* Main Timeline Content */}
         <section className="mb-16">
+          {loadError && (
+            <div
+              role="alert"
+              className="mb-4 rounded-xl border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300"
+            >
+              {loadError}{" "}
+              <button
+                type="button"
+                className="font-medium text-cyan-400 underline-offset-2 hover:underline"
+                onClick={() => void loadTasksForDate(true)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-blue-200/50">
               Timeline
             </h2>
             {tasks.length > 0 && !tasksLoading && (
-              <button
-                onClick={generateRoutine}
-                disabled={generating}
-                className="text-xs font-medium text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 disabled:opacity-50"
-              >
-                {generating ? "Regenerating..." : "↻ Regenerate"}
-              </button>
+              <div className="flex items-center gap-3">
+                <Link
+                  href={`/dashboard/constraints?date=${scheduleDate}&edit=1`}
+                  className="text-xs font-medium text-blue-200/80 hover:text-cyan-300 hover:underline underline-offset-2"
+                >
+                  Edit schedule
+                </Link>
+                <button
+                  type="button"
+                  onClick={generateRoutine}
+                  disabled={generating}
+                  className="text-xs font-medium text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 disabled:opacity-50"
+                >
+                  {generating ? "Regenerating..." : "↻ Regenerate"}
+                </button>
+              </div>
             )}
           </div>
 
@@ -587,7 +639,7 @@ export function DashboardClient({
               )}
 
               <Link
-                href={`/dashboard/constraints?date=${scheduleDate}`}
+                href="/dashboard/constraints"
                 className="inline-flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-8 py-4 text-sm font-bold tracking-wide text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all hover:-translate-y-1"
               >
                 ✨ Create New Routine
@@ -596,9 +648,16 @@ export function DashboardClient({
           ) : (
             <div className="relative pl-4 sm:pl-8 border-l border-blue-900/30 ml-2 sm:ml-4">
               <div className="space-y-6">
-                {tasks.map((task) => (
-                  <div 
-                    key={task.id} 
+                {tasks.map((task) => {
+                  const missed = isTaskMissed(
+                    task,
+                    nowMs,
+                    scheduleDate,
+                    calendarToday,
+                  );
+                  return (
+                  <div
+                    key={task.id}
                     className={`relative transition-all duration-500 ${task.completed ? "opacity-40 translate-x-2" : "opacity-100"}`}
                   >
                     {/* Timeline Node */}
@@ -632,11 +691,17 @@ export function DashboardClient({
                           <span className={`block text-sm font-medium ${task.completed ? "opacity-50" : "opacity-80"}`}>
                             {formatTaskTimeLabel(task)}
                           </span>
+                          {missed && (
+                            <span className="mt-1.5 inline-block text-xs font-medium text-amber-400/90">
+                              You missed this time
+                            </span>
+                          )}
                         </div>
                       </div>
                     </label>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

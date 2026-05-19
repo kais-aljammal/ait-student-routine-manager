@@ -21,9 +21,13 @@ test("date selection labels today and tomorrow correctly", () => {
   assert.equal(getDateLabel("2026-05-03", today), "custom");
 });
 
-test("date validation accepts only YYYY-MM-DD", () => {
+test("date validation accepts only real YYYY-MM-DD calendar dates", () => {
   assert.equal(isValidScheduleDate("2026-05-01"), true);
+  assert.equal(isValidScheduleDate("2024-02-29"), true);
   assert.equal(isValidScheduleDate("2026-5-1"), false);
   assert.equal(isValidScheduleDate("05/01/2026"), false);
   assert.equal(isValidScheduleDate(""), false);
+  assert.equal(isValidScheduleDate("2025-02-31"), false);
+  assert.equal(isValidScheduleDate("2025-13-01"), false);
+  assert.equal(isValidScheduleDate("0000-00-00"), false);
 });

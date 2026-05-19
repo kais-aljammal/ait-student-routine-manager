@@ -41,9 +41,17 @@ export async function GET(request: Request) {
     .select("id, user_id, title, starts_at, alert_sent_at")
     .gte("starts_at", now.toISOString())
     .lte("starts_at", in15.toISOString())
-    .is("alert_sent_at", null);
+    .is("alert_sent_at", null)
+    .eq("completed", false);
 
   if (tasksError) {
+    console.error(
+      JSON.stringify({
+        route: "send-alerts",
+        errorCode: "TASKS_QUERY_FAILED",
+        message: tasksError.message,
+      }),
+    );
     return NextResponse.json({ error: tasksError.message }, { status: 500 });
   }
 
@@ -94,6 +102,15 @@ export async function GET(request: Request) {
       sent += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        JSON.stringify({
+          route: "send-alerts",
+          errorCode: "TELEGRAM_SEND_FAILED",
+          taskId: task.id,
+          userId: task.user_id,
+          message: msg,
+        }),
+      );
       errors.push(`${task.id}: ${msg}`);
     }
   }

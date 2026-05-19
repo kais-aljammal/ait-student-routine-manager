@@ -1,11 +1,9 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function LogoutButton() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,8 +17,7 @@ export function LogoutButton() {
         setError(signOutError.message);
         return;
       }
-      router.push("/login");
-      router.refresh();
+      window.location.href = "/login";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign out failed.");
     } finally {

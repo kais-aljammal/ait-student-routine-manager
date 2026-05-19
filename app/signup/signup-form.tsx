@@ -3,7 +3,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { withTimeout } from "@/lib/utils";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 function getCallbackUrl() {
@@ -27,7 +26,6 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
 
   async function handleSubmit(e: React.FormEvent) {
@@ -59,12 +57,18 @@ export function SignupForm() {
         return;
       }
       if (data.session) {
-        router.replace("/dashboard");
-        router.refresh();
+        setInfo("Account created. Taking you to the dashboard…");
+        window.location.assign("/dashboard");
+        return;
+      }
+      if (data.user) {
+        setInfo(
+          "Check your email for a confirmation link. After you confirm, sign in with the same password.",
+        );
         return;
       }
       setInfo(
-        "Check your email for a confirmation link. After you confirm, you can sign in.",
+        "If email confirmation is enabled for this project, check your inbox (and spam). Otherwise try signing in.",
       );
     } catch (err) {
       const message =
