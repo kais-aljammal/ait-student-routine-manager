@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { isValidScheduleDate } from "@/lib/dashboard/date-selection";
 import { getTodayDateStringInTimeZone } from "@/lib/date";
+import type { TimezoneSource } from "@/lib/location/timezone";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "./dashboard-client";
 
@@ -38,6 +39,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       userEmail={user.email ?? ""}
       profileName={profile.full_name}
       timeZone={timeZone}
+      timezoneSource={(profile.timezone_source as TimezoneSource) ?? null}
+      city={profile.city}
+      countryCode={profile.country_code}
       todayDate={todayDate}
       initialSelectedDate={selectedDate}
       initialTelegramChatId={profile.telegram_chat_id}

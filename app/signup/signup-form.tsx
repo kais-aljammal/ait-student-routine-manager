@@ -47,6 +47,8 @@ export function SignupForm() {
                 typeof Intl !== "undefined"
                   ? Intl.DateTimeFormat().resolvedOptions().timeZone
                   : undefined,
+              locale:
+                typeof navigator !== "undefined" ? navigator.language : undefined,
             },
           },
         }),

@@ -3,6 +3,10 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 export type ProfileRow = {
   full_name: string | null;
   timezone: string | null;
+  timezone_source: string | null;
+  locale: string | null;
+  city: string | null;
+  country_code: string | null;
   telegram_chat_id: string | null;
 };
 
@@ -16,7 +20,9 @@ export async function ensureUserProfile(
 ): Promise<{ profile: ProfileRow; error: null } | { profile: null; error: string }> {
   const { data: existing, error: selectError } = await supabase
     .from("profiles")
-    .select("full_name, timezone, telegram_chat_id")
+    .select(
+      "full_name, timezone, timezone_source, locale, city, country_code, telegram_chat_id",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -42,6 +48,11 @@ export async function ensureUserProfile(
     id: user.id,
     full_name: fullName,
     timezone,
+    timezone_source: timezone !== "UTC" ? "signup" : null,
+    locale:
+      typeof meta?.locale === "string" && meta.locale.trim()
+        ? meta.locale.trim()
+        : null,
   });
 
   if (insertError && insertError.code !== "23505") {
@@ -50,7 +61,9 @@ export async function ensureUserProfile(
 
   const { data: created, error: refetchError } = await supabase
     .from("profiles")
-    .select("full_name, timezone, telegram_chat_id")
+    .select(
+      "full_name, timezone, timezone_source, locale, city, country_code, telegram_chat_id",
+    )
     .eq("id", user.id)
     .single();
 

@@ -59,7 +59,7 @@ export async function GET(request: Request) {
         if (chosenTz && ensured.profile) {
           await supabase
             .from("profiles")
-            .update({ timezone: chosenTz })
+            .update({ timezone: chosenTz, timezone_source: "signup" })
             .eq("id", user.id);
         }
       }
