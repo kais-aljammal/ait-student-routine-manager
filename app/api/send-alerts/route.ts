@@ -121,3 +121,5 @@ export async function GET(request: Request) {
     errors: errors.length ? errors : undefined,
   });
 }
+
+export const POST = GET;
