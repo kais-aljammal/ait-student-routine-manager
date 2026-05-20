@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { isValidScheduleDate } from "@/lib/dashboard/date-selection";
 import { getTodayDateStringInTimeZone } from "@/lib/date";
+import type { TimezoneSource } from "@/lib/location/timezone";
 import { redirect } from "next/navigation";
 import { DashboardClient } from "./dashboard-client";
 
@@ -18,15 +20,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect("/login?next=/dashboard");
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("full_name, timezone, telegram_chat_id")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile) {
-    redirect("/login?next=/dashboard");
+  const ensured = await ensureUserProfile(supabase, user);
+  if (!ensured.profile) {
+    console.error("ensureUserProfile failed:", ensured.error);
+    redirect("/login?next=/dashboard&error=profile");
   }
+  const { profile } = ensured;
 
   const timeZone = profile.timezone?.trim() || "UTC";
   const todayDate = getTodayDateStringInTimeZone(timeZone);
@@ -40,6 +39,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       userEmail={user.email ?? ""}
       profileName={profile.full_name}
       timeZone={timeZone}
+      timezoneSource={(profile.timezone_source as TimezoneSource) ?? null}
+      city={profile.city}
+      countryCode={profile.country_code}
       todayDate={todayDate}
       initialSelectedDate={selectedDate}
       initialTelegramChatId={profile.telegram_chat_id}

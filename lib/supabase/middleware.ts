@@ -55,8 +55,22 @@ export async function updateSession(request: NextRequest) {
     (request.nextUrl.pathname === "/login" ||
       request.nextUrl.pathname === "/signup")
   ) {
+    const isLogin = request.nextUrl.pathname === "/login";
+    if (isLogin && request.nextUrl.searchParams.get("error") === "profile") {
+      return supabaseResponse;
+    }
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    const nextParam = request.nextUrl.searchParams.get("next");
+    if (
+      request.nextUrl.pathname === "/login" &&
+      nextParam &&
+      nextParam.startsWith("/") &&
+      !nextParam.startsWith("//")
+    ) {
+      url.pathname = nextParam;
+    } else {
+      url.pathname = "/dashboard";
+    }
     url.search = "";
     const redirectResponse = NextResponse.redirect(url);
     copyCookies(supabaseResponse, redirectResponse);

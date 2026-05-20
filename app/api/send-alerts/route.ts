@@ -1,4 +1,5 @@
 // Sends Telegram reminders for tasks starting in the next 15 minutes.
+import { formatTimeInTimeZone } from "@/lib/date";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { NextResponse } from "next/server";
@@ -41,9 +42,17 @@ export async function GET(request: Request) {
     .select("id, user_id, title, starts_at, alert_sent_at")
     .gte("starts_at", now.toISOString())
     .lte("starts_at", in15.toISOString())
-    .is("alert_sent_at", null);
+    .is("alert_sent_at", null)
+    .eq("completed", false);
 
   if (tasksError) {
+    console.error(
+      JSON.stringify({
+        route: "send-alerts",
+        errorCode: "TASKS_QUERY_FAILED",
+        message: tasksError.message,
+      }),
+    );
     return NextResponse.json({ error: tasksError.message }, { status: 500 });
   }
 
@@ -55,7 +64,7 @@ export async function GET(request: Request) {
   const userIds = [...new Set(list.map((t) => t.user_id))];
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
-    .select("id, telegram_chat_id")
+    .select("id, telegram_chat_id, timezone")
     .in("id", userIds)
     .not("telegram_chat_id", "is", null);
 
@@ -63,11 +72,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: profilesError.message }, { status: 500 });
   }
 
-  const chatByUser = new Map<string, string>();
+  const chatByUser = new Map<string, { chatId: string; timeZone: string }>();
   for (const p of profiles ?? []) {
     const raw = p.telegram_chat_id?.trim();
     if (raw) {
-      chatByUser.set(p.id, raw);
+      chatByUser.set(p.id, {
+        chatId: raw,
+        timeZone: p.timezone?.trim() || "UTC",
+      });
     }
   }
 
@@ -75,13 +87,14 @@ export async function GET(request: Request) {
   const errors: string[] = [];
 
   for (const task of list) {
-    const chatId = chatByUser.get(task.user_id);
-    if (!chatId) continue;
+    const linked = chatByUser.get(task.user_id);
+    if (!linked) continue;
 
     try {
+      const localTime = formatTimeInTimeZone(task.starts_at, linked.timeZone);
       await sendTelegramMessage(
-        chatId,
-        `Reminder: "${task.title}" starts in 15 minutes.`,
+        linked.chatId,
+        `Reminder: "${task.title}" starts at ${localTime} (in about 15 minutes).`,
       );
       const { error: upErr } = await supabase
         .from("tasks")
@@ -94,6 +107,15 @@ export async function GET(request: Request) {
       sent += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        JSON.stringify({
+          route: "send-alerts",
+          errorCode: "TELEGRAM_SEND_FAILED",
+          taskId: task.id,
+          userId: task.user_id,
+          message: msg,
+        }),
+      );
       errors.push(`${task.id}: ${msg}`);
     }
   }

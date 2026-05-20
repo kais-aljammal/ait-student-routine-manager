@@ -9,9 +9,7 @@ export function getTodayDateStringInTimeZone(timeZone: string): string {
 }
 
 /**
- * Dashboard calendar-day selection should match the user's real day.
- * If the profile timezone is missing or left as UTC (common default), fall back to the
- * browser's IANA timezone for *date picking only* (times still use profile TZ elsewhere).
+ * @deprecated Prefer resolveEffectiveTimeZone from lib/location/timezone on the client.
  */
 export function getDashboardCalendarTimeZone(profileTimeZone: string): {
   calendarTimeZone: string;

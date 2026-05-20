@@ -1,9 +1,18 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-slate-950 p-8 text-white">
+    <main className="relative flex min-h-screen flex-col items-center justify-center gap-8 bg-slate-950 p-8 text-white">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/40 via-slate-950 to-slate-950 pointer-events-none" />
+
+      <Link
+        href="/"
+        className="absolute left-6 top-6 z-20 sm:left-10 sm:top-8 hover:opacity-90 transition-opacity"
+        aria-label="Routine.ai — home"
+      >
+        <BrandLogo className="text-lg font-bold tracking-tight sm:text-xl" />
+      </Link>
       
       <div className="z-10 text-center max-w-2xl">
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight">

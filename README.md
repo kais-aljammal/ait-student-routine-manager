@@ -26,15 +26,24 @@ A Next.js app that helps students generate and track daily routines from their r
 1. Clone the repository.
 2. Install dependencies:
    - `npm install`
-3. Create local env file:
-   - Copy `.env.example` to `.env.local`
-4. Fill required environment values (see section below).
+3. Environment variables (see below):
+   - **If you already have `.env.local` with your keys, skip copying — you are done.**
+   - New clones only: copy `.env.example` → `.env.local`, then fill values **in `.env.local` only**.
+4. Fill required values in `.env.local` if setting up for the first time.
 5. Run development server:
    - `npm run dev`
 6. Open the app:
    - `http://localhost:3000` (or next available port)
 
 ## Environment Variables
+
+| File | Purpose |
+|------|---------|
+| `.env.example` | Committed **template** (variable names + comments). Leave values empty. |
+| `.env.local` | Your real secrets. **Next.js loads this at runtime.** Git-ignored. |
+
+You do **not** need to fill in `.env.example` if `.env.local` is already configured — the app never reads `.env.example` when you run `npm run dev`.
+
 Use `.env.local` for local development. Do not commit secrets.
 
 Minimum required (example placeholders only):
@@ -65,7 +74,7 @@ See `.env.example` for the full list and descriptions.
 
 ## Deployment Notes
 - Set all required environment variables in your hosting platform.
-- Ensure Supabase schema/migrations are applied before first deploy.
+- Ensure Supabase schema/migrations are applied before first deploy (including `003_profiles_insert_policy.sql` for profile self-heal on sign-in).
 - Keep service-role keys server-side only.
 - Verify authenticated API routes (`/api/generate-schedule`, `/api/tasks`) in staging.
 - Confirm timezone/date behavior in deployed environment.
@@ -75,9 +84,10 @@ See `.env.example` for the full list and descriptions.
 - `components/` - Shared UI components
 - `lib/` - Domain logic (date, schedule parsing/sanitizing, provider integration)
 - `supabase/` - SQL migrations and Supabase-related setup
-- `scripts/` - Utility scripts (docs tooling, smoke helpers)
+- `scripts/` - Utility scripts (e.g. smoke tests)
 
 ## Troubleshooting
+- **Signed up but no verification email / can sign in immediately:** In Supabase → **Authentication** → **Providers** → **Email**, check **Confirm email**. If it is **off**, Supabase returns a session on signup and the app sends you straight to the dashboard (no email). Turn **Confirm email** on for production if you require verification; configure SMTP or use Supabase’s mailer, and add your site URL under **Authentication** → **URL configuration**.
 - **Port already in use:** Next.js auto-picks another port; check terminal output.
 - **401 on task/generation APIs:** Ensure user is signed in and session is valid.
 - **No tasks shown for selected date:** Confirm selected date format (`YYYY-MM-DD`) and that generation was run for that date.

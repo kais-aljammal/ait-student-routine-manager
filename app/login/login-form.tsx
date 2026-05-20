@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { withTimeout } from "@/lib/utils";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 export function LoginForm() {
@@ -11,14 +11,15 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
   const urlError = searchParams.get("error");
   const urlAuthMessage =
     urlError === "auth"
       ? "Email link is invalid or expired. Try signing in again."
-      : null;
+      : urlError === "profile"
+        ? "Your account is signed in, but your profile could not be loaded. Apply the latest database migration (profiles insert policy) or contact support."
+        : null;
   const displayError = error ?? urlAuthMessage;
 
 
@@ -39,8 +40,10 @@ export function LoginForm() {
         setError(signError.message);
         return;
       }
-      router.replace(next.startsWith("/") ? next : "/dashboard");
-      router.refresh();
+      const safeNext =
+        next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+      // Full navigation so the next document request includes auth cookies reliably (App Router + SSR).
+      window.location.assign(safeNext);
     } catch (err) {
       const message =
         err instanceof Error && err.message
@@ -64,9 +67,26 @@ export function LoginForm() {
         </p>
       </div>
       {displayError && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-          {displayError}
-        </p>
+        <div className="space-y-3">
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+            {displayError}
+          </p>
+          {urlError === "profile" && (
+            <button
+              type="button"
+              className="w-full rounded-xl border border-blue-900/50 bg-slate-950/50 px-4 py-2 text-sm font-medium text-blue-100 hover:bg-slate-800"
+              onClick={() => {
+                void (async () => {
+                  const supabase = createClient();
+                  await supabase.auth.signOut();
+                  window.location.assign("/login");
+                })();
+              }}
+            >
+              Sign out and try again
+            </button>
+          )}
+        </div>
       )}
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium text-blue-100">Email</span>

@@ -1,19 +1,25 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
 import {
   formatTimeInTimeZone,
-  getDashboardCalendarTimeZone,
   getTodayDateStringInTimeZone,
 } from "@/lib/date";
+import {
+  formatTimezoneDisplay,
+  resolveEffectiveTimeZone,
+  type TimezoneSource,
+} from "@/lib/location/timezone";
 import {
   getDateLabel,
   getTomorrowDate,
   isValidScheduleDate,
 } from "@/lib/dashboard/date-selection";
+import { isTaskMissed } from "@/lib/dashboard/task-status";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LogoutButton } from "./logout-button";
+import { DashboardSettings } from "./dashboard-settings";
+import { BrandLogo } from "@/components/brand-logo";
 
 export type TaskRow = {
   id: string;
@@ -29,6 +35,9 @@ type Props = {
   userEmail: string;
   profileName: string | null;
   timeZone: string;
+  timezoneSource: TimezoneSource;
+  city: string | null;
+  countryCode: string | null;
   todayDate: string;
   initialSelectedDate: string;
   initialTelegramChatId: string | null;
@@ -106,13 +115,16 @@ export function DashboardClient({
   userEmail,
   profileName,
   timeZone,
+  timezoneSource,
+  city,
+  countryCode,
   todayDate,
   initialSelectedDate,
   initialTelegramChatId,
 }: Props) {
   const [calendarToday, setCalendarToday] = useState(todayDate);
-  const [calendarTzLabel, setCalendarTzLabel] = useState(timeZone);
-  const [calendarUsesBrowserFallback, setCalendarUsesBrowserFallback] = useState(false);
+  const [effectiveTimeZone, setEffectiveTimeZone] = useState(timeZone);
+  const [effectiveSource, setEffectiveSource] = useState<TimezoneSource>(timezoneSource);
 
   const tomorrowDate = getTomorrowDate(calendarToday);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
@@ -126,10 +138,10 @@ export function DashboardClient({
   const [clearError, setClearError] = useState<string | null>(null);
   
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [telegramId, setTelegramId] = useState(initialTelegramChatId ?? "");
-  const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
-  const [telegramLoading, setTelegramLoading] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState(initialTelegramChatId ?? "");
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const scheduleDate = selectedDate;
   useEffect(() => {
@@ -148,15 +160,20 @@ export function DashboardClient({
   const selectedDateLabel = dateLabel === "custom" ? scheduleDate : dateLabel;
 
   useEffect(() => {
-    setTelegramId(initialTelegramChatId ?? "");
+    setTelegramChatId(initialTelegramChatId ?? "");
   }, [initialTelegramChatId]);
 
   useEffect(() => {
-    const { calendarTimeZone, usesBrowserFallback } = getDashboardCalendarTimeZone(timeZone);
-    const recomputedToday = getTodayDateStringInTimeZone(calendarTimeZone);
+    const resolved = resolveEffectiveTimeZone({
+      profileTimeZone: timeZone,
+      timezoneSource,
+    });
+    const recomputedToday = getTodayDateStringInTimeZone(resolved.timeZone);
+    setEffectiveTimeZone(resolved.timeZone);
+    setEffectiveSource(
+      resolved.source === "fallback" ? timezoneSource : resolved.source,
+    );
     setCalendarToday(recomputedToday);
-    setCalendarTzLabel(calendarTimeZone);
-    setCalendarUsesBrowserFallback(usesBrowserFallback);
 
     setSelectedDate((prev) => {
       if (prev === todayDate && recomputedToday !== todayDate) {
@@ -167,23 +184,20 @@ export function DashboardClient({
       }
       return prev;
     });
-  }, [timeZone, todayDate]);
 
-  useEffect(() => {
-    if (!calendarUsesBrowserFallback) return;
-    if (!calendarTzLabel || calendarTzLabel.toUpperCase() === "UTC") return;
+    if (!resolved.shouldAutoPersist) return;
     let cancelled = false;
     const syncTimezone = async () => {
       try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user || cancelled) return;
-        await supabase
-          .from("profiles")
-          .update({ timezone: calendarTzLabel })
-          .eq("id", user.id);
+        const res = await fetch("/api/profile/location", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timezone: resolved.timeZone,
+            timezone_source: "browser",
+          }),
+        });
+        if (!res.ok || cancelled) return;
       } catch {
         // best-effort profile backfill only
       }
@@ -192,7 +206,7 @@ export function DashboardClient({
     return () => {
       cancelled = true;
     };
-  }, [calendarUsesBrowserFallback, calendarTzLabel]);
+  }, [timeZone, timezoneSource, todayDate]);
 
   const progressPercent = useMemo(() => {
     if (tasks.length === 0) return 0;
@@ -215,9 +229,9 @@ export function DashboardClient({
 
   function formatTaskTimeLabel(task: TaskRow): string {
     if (task.title === "Wake Up Time") {
-      return formatTimeInTimeZone(task.ends_at, timeZone);
+      return formatTimeInTimeZone(task.ends_at, effectiveTimeZone);
     }
-    return `${formatTimeInTimeZone(task.starts_at, timeZone)} – ${formatTimeInTimeZone(task.ends_at, timeZone)}`;
+    return `${formatTimeInTimeZone(task.starts_at, effectiveTimeZone)} – ${formatTimeInTimeZone(task.ends_at, effectiveTimeZone)}`;
   }
 
   function normalizeTasks(raw: unknown): TaskRow[] {
@@ -244,39 +258,60 @@ export function DashboardClient({
   async function loadTasksForDate(force = false) {
     if (!isValidScheduleDate(scheduleDate)) {
       setTasks([]);
+      setLoadError(null);
       setTasksLoading(false);
       return;
     }
     if (!force) {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
-        const parsed = normalizeTasks(JSON.parse(cached));
-        // Don't trust empty cache — always verify with server
-        if (parsed.length > 0) {
-          setTasks(parsed);
-          setTasksLoading(false);
-          return;
+        try {
+          const parsed = normalizeTasks(JSON.parse(cached));
+          // Don't trust empty cache — always verify with server
+          if (parsed.length > 0) {
+            setTasks(parsed);
+            setLoadError(null);
+            setTasksLoading(false);
+            return;
+          }
+        } catch {
+          sessionStorage.removeItem(cacheKey);
         }
       }
     }
     setTasksLoading(true);
-    const res = await fetch(`/api/tasks?schedule_date=${scheduleDate}`, {
-      method: "GET",
-    });
-    const data = await parseApiResponse<{ error?: string; tasks?: unknown }>(res);
-    if (!res.ok) {
-      throw new Error(mapErrorMessage(data.error, res.status, "Failed to load tasks."));
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/tasks?schedule_date=${scheduleDate}`, {
+        method: "GET",
+      });
+      const data = await parseApiResponse<{ error?: string; tasks?: unknown }>(res);
+      if (!res.ok) {
+        throw new Error(
+          mapErrorMessage(data.error, res.status, "Failed to load tasks."),
+        );
+      }
+      const normalized = normalizeTasks(data.tasks);
+      sessionStorage.setItem(cacheKey, JSON.stringify(normalized));
+      setTasks(normalized);
+    } catch {
+      setLoadError("Failed to load tasks. Please refresh.");
+    } finally {
+      setTasksLoading(false);
     }
-    const normalized = normalizeTasks(data.tasks);
-    sessionStorage.setItem(cacheKey, JSON.stringify(normalized));
-    setTasks(normalized);
-    setTasksLoading(false);
   }
 
   useEffect(() => {
     void loadTasksForDate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleDate]);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (scheduleDate !== calendarToday) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [scheduleDate, calendarToday]);
 
   async function generateRoutine() {
     setGenerateError(null);
@@ -361,45 +396,6 @@ export function DashboardClient({
     }
   }, [cacheKey]);
 
-  async function saveTelegram() {
-    setTelegramMsg(null);
-    setTelegramLoading(true);
-    try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setTelegramMsg("Your session expired. Please sign in again.");
-        window.location.href = "/login?next=/dashboard";
-        return;
-      }
-      const trimmed = telegramId.trim();
-      if (trimmed && !/^\d+$/.test(trimmed)) {
-        setTelegramMsg("Chat ID must be a number");
-        return;
-      }
-      const { error } = await supabase
-        .from("profiles")
-        .update({ telegram_chat_id: trimmed.length ? trimmed : null })
-        .eq("id", user.id);
-      if (error) {
-        setTelegramMsg(mapErrorMessage(error.message, undefined, "Failed to save chat ID."));
-        return;
-      }
-      setTelegramMsg("Saved.");
-    } catch (error) {
-      setTelegramMsg(mapErrorMessage(error, undefined, "Failed to save chat ID."));
-    } finally {
-      setTelegramLoading(false);
-    }
-  }
-
-  function handleTelegramSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void saveTelegram();
-  }
-
   return (
     <main className="relative min-h-screen bg-slate-950 px-4 py-8 sm:px-6 text-white font-sans overflow-x-hidden">
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/10 via-slate-950 to-slate-950 pointer-events-none z-0" />
@@ -407,17 +403,24 @@ export function DashboardClient({
       <div className="relative z-10 mx-auto max-w-3xl">
         <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-blue-900/30 pb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              Routine<span className="text-cyan-400">.ai</span>
-            </h1>
+            <BrandLogo as="h1" className="text-2xl font-bold tracking-tight" />
             <p className="mt-1 text-sm text-blue-200/60">
               <span className="font-medium text-blue-100">{profileName || userEmail}</span>
+              {city ? (
+                <span className="text-blue-300/50"> · {city}{countryCode ? `, ${countryCode}` : ""}</span>
+              ) : null}
             </p>
             <p className="mt-1 text-xs text-blue-300/50">
-              Telegram reminders: {telegramId.trim() ? "connected" : "not connected"} (Settings)
+              Telegram reminders:{" "}
+              {telegramChatId.trim() ? (
+                <span className="text-cyan-400/90">connected</span>
+              ) : (
+                <span>not connected</span>
+              )}{" "}
+              (<button type="button" onClick={() => setSettingsOpen(true)} className="text-cyan-400/80 hover:underline">Settings</button>)
             </p>
             <p className="mt-1 text-xs text-blue-300/40">
-              {scheduleDate} ({calendarTzLabel})
+              {scheduleDate} · {formatTimezoneDisplay(effectiveTimeZone)}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -521,10 +524,14 @@ export function DashboardClient({
             </div>
             <div className="flex gap-2">
               <Link
-                href={`/dashboard/constraints?date=${scheduleDate}`}
+                href={
+                  tasks.length > 0
+                    ? `/dashboard/constraints?date=${scheduleDate}&edit=1`
+                    : "/dashboard/constraints"
+                }
                 className="flex-1 flex items-center justify-center rounded-xl bg-slate-800/80 border border-blue-900/50 py-2.5 text-xs font-semibold text-blue-100 hover:bg-slate-700 hover:text-white transition-colors"
               >
-                ✎ Constraints
+                {tasks.length > 0 ? "✎ Edit" : "✎ Setup"}
               </Link>
               <button
                 suppressHydrationWarning
@@ -542,18 +549,42 @@ export function DashboardClient({
 
         {/* Main Timeline Content */}
         <section className="mb-16">
+          {loadError && (
+            <div
+              role="alert"
+              className="mb-4 rounded-xl border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300"
+            >
+              {loadError}{" "}
+              <button
+                type="button"
+                className="font-medium text-cyan-400 underline-offset-2 hover:underline"
+                onClick={() => void loadTasksForDate(true)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-sm font-semibold uppercase tracking-widest text-blue-200/50">
               Timeline
             </h2>
             {tasks.length > 0 && !tasksLoading && (
-              <button
-                onClick={generateRoutine}
-                disabled={generating}
-                className="text-xs font-medium text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 disabled:opacity-50"
-              >
-                {generating ? "Regenerating..." : "↻ Regenerate"}
-              </button>
+              <div className="flex items-center gap-3">
+                <Link
+                  href={`/dashboard/constraints?date=${scheduleDate}&edit=1`}
+                  className="text-xs font-medium text-blue-200/80 hover:text-cyan-300 hover:underline underline-offset-2"
+                >
+                  Edit schedule
+                </Link>
+                <button
+                  type="button"
+                  onClick={generateRoutine}
+                  disabled={generating}
+                  className="text-xs font-medium text-cyan-400 hover:text-cyan-300 hover:underline underline-offset-2 disabled:opacity-50"
+                >
+                  {generating ? "Regenerating..." : "↻ Regenerate"}
+                </button>
+              </div>
             )}
           </div>
 
@@ -587,7 +618,7 @@ export function DashboardClient({
               )}
 
               <Link
-                href={`/dashboard/constraints?date=${scheduleDate}`}
+                href="/dashboard/constraints"
                 className="inline-flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-8 py-4 text-sm font-bold tracking-wide text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all hover:-translate-y-1"
               >
                 ✨ Create New Routine
@@ -596,9 +627,16 @@ export function DashboardClient({
           ) : (
             <div className="relative pl-4 sm:pl-8 border-l border-blue-900/30 ml-2 sm:ml-4">
               <div className="space-y-6">
-                {tasks.map((task) => (
-                  <div 
-                    key={task.id} 
+                {tasks.map((task) => {
+                  const missed = isTaskMissed(
+                    task,
+                    nowMs,
+                    scheduleDate,
+                    calendarToday,
+                  );
+                  return (
+                  <div
+                    key={task.id}
                     className={`relative transition-all duration-500 ${task.completed ? "opacity-40 translate-x-2" : "opacity-100"}`}
                   >
                     {/* Timeline Node */}
@@ -632,11 +670,17 @@ export function DashboardClient({
                           <span className={`block text-sm font-medium ${task.completed ? "opacity-50" : "opacity-80"}`}>
                             {formatTaskTimeLabel(task)}
                           </span>
+                          {missed && (
+                            <span className="mt-1.5 inline-block text-xs font-medium text-amber-400/90">
+                              You missed this time
+                            </span>
+                          )}
                         </div>
                       </div>
                     </label>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -652,52 +696,29 @@ export function DashboardClient({
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setSettingsOpen(false)} />
-          <div className="relative w-full max-w-sm rounded-2xl border border-blue-900/50 bg-slate-900 shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-md rounded-2xl border border-blue-900/50 bg-slate-900 shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
             <button 
               onClick={() => setSettingsOpen(false)}
               className="absolute right-4 top-4 text-blue-300/50 hover:text-white"
             >
               ✕
             </button>
-            <h2 className="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-white mb-4 pr-6">
               ⚙️ Settings
             </h2>
-            <p className="text-xs text-blue-200/70 mb-6">
-              Configure optional features like Telegram alerts.
-            </p>
-            
-            <form onSubmit={handleTelegramSubmit} className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-blue-100">Telegram Chat ID</span>
-                <input
-                  suppressHydrationWarning
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="e.g. 123456789"
-                  value={telegramId}
-                  onChange={(e) => setTelegramId(e.target.value.replace(/\D/g, ""))}
-                  className="rounded-xl border border-blue-900/50 bg-slate-950/50 px-4 py-3 text-sm text-white placeholder-blue-300/30 outline-none ring-cyan-400/50 focus:border-cyan-400 focus:ring-2 transition-all"
-                />
-              </label>
-              <p className="text-[11px] text-blue-200/50 leading-tight">
-                Used to send you 15-minute reminders before tasks. Get your ID from @userinfobot.
-              </p>
-              
-              <button
-                suppressHydrationWarning
-                type="submit"
-                disabled={telegramLoading}
-                className="mt-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50"
-              >
-                {telegramLoading ? "Saving…" : "Save Settings"}
-              </button>
-              
-              {telegramMsg && (
-                <p className={`text-sm text-center ${telegramMsg === "Saved." ? "text-cyan-400" : "text-red-400"}`}>
-                  {telegramMsg}
-                </p>
-              )}
-            </form>
+            <DashboardSettings
+              initialTimeZone={effectiveTimeZone}
+              initialTimezoneSource={effectiveSource}
+              initialCity={city}
+              initialCountryCode={countryCode}
+              initialTelegramChatId={telegramChatId}
+              onTimeZoneChange={(tz, source) => {
+                setEffectiveTimeZone(tz);
+                setEffectiveSource(source);
+                setCalendarToday(getTodayDateStringInTimeZone(tz));
+              }}
+              onTelegramChange={(chatId) => setTelegramChatId(chatId ?? "")}
+            />
           </div>
         </div>
       )}

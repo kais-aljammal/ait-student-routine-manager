@@ -1,9 +1,8 @@
 import { addDaysToDateString } from "@/lib/date";
-
-const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+import { isValidCalendarDate } from "@/lib/utils/date";
 
 export function isValidScheduleDate(v: string): boolean {
-  return dateRe.test(v);
+  return isValidCalendarDate(v);
 }
 
 export function getTomorrowDate(todayDate: string): string {

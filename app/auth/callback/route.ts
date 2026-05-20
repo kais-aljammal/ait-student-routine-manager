@@ -1,3 +1,4 @@
+import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -53,10 +54,14 @@ export async function GET(request: Request) {
         : isLikelyIanaTimeZone(metadataTz)
           ? metadataTz
           : null;
-      if (user && chosenTz) {
-        await supabase
-          .from("profiles")
-          .upsert({ id: user.id, timezone: chosenTz }, { onConflict: "id" });
+      if (user) {
+        const ensured = await ensureUserProfile(supabase, user);
+        if (chosenTz && ensured.profile) {
+          await supabase
+            .from("profiles")
+            .update({ timezone: chosenTz, timezone_source: "signup" })
+            .eq("id", user.id);
+        }
       }
       return NextResponse.redirect(`${origin}${next}`);
     }
