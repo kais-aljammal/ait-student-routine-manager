@@ -45,6 +45,7 @@ yarn-error.log*
 # local / private (keep on disk, not in the public repo)
 PRD.md
 PRD*.md
+*FIX_REPORT*
 *HANDOFF*
 *handoff*
 poster.html

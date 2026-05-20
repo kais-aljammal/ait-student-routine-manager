@@ -1,4 +1,5 @@
 // Updates completion state for a single user-owned task.
+import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -49,7 +50,7 @@ export async function PATCH(request: Request, context: Ctx) {
     .single();
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return serverErrorResponse("tasks/[id]", "UPDATE_FAILED", updateError);
   }
 
   return NextResponse.json({ ok: true, task: updated });

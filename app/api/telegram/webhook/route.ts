@@ -1,5 +1,6 @@
+import { logRouteError, serverErrorResponse } from "@/lib/api/safe-error";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { isPublicAppUrl, sendTelegramMessage } from "@/lib/telegram";
 import { NextResponse } from "next/server";
 
 type TelegramUpdate = {
@@ -24,6 +25,13 @@ function extractLinkToken(text: string | undefined): string | null {
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const requiresSecret = Boolean(appUrl && isPublicAppUrl(appUrl));
+
+  if (requiresSecret && !webhookSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (webhookSecret) {
     const header = request.headers.get("x-telegram-bot-api-secret-token");
     if (header !== webhookSecret) {
@@ -56,15 +64,7 @@ export async function POST(request: Request) {
   try {
     supabase = createServiceRoleClient();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(
-      JSON.stringify({
-        route: "telegram/webhook",
-        errorCode: "SUPABASE_MISCONFIGURED",
-        message: msg,
-      }),
-    );
-    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+    return serverErrorResponse("telegram/webhook", "SUPABASE_MISCONFIGURED", e);
   }
 
   const nowIso = new Date().toISOString();
@@ -75,14 +75,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (lookupError) {
-    console.error(
-      JSON.stringify({
-        route: "telegram/webhook",
-        errorCode: "LOOKUP_FAILED",
-        message: lookupError.message,
-      }),
-    );
-    return NextResponse.json({ error: lookupError.message }, { status: 500 });
+    return serverErrorResponse("telegram/webhook", "LOOKUP_FAILED", lookupError);
   }
 
   if (!profile) {
@@ -112,15 +105,9 @@ export async function POST(request: Request) {
     .eq("id", profile.id);
 
   if (updateError) {
-    console.error(
-      JSON.stringify({
-        route: "telegram/webhook",
-        errorCode: "LINK_SAVE_FAILED",
-        userId: profile.id,
-        message: updateError.message,
-      }),
-    );
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return serverErrorResponse("telegram/webhook", "LINK_SAVE_FAILED", updateError, {
+      userId: profile.id,
+    });
   }
 
   console.info(

@@ -1,3 +1,4 @@
+import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import {
   isValidIanaTimeZone,
@@ -90,15 +91,9 @@ export async function PATCH(request: Request) {
     .single();
 
   if (error) {
-    console.error(
-      JSON.stringify({
-        route: "profile/location",
-        errorCode: "UPDATE_FAILED",
-        userId: user.id,
-        message: error.message,
-      }),
-    );
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverErrorResponse("profile/location", "UPDATE_FAILED", error, {
+      userId: user.id,
+    });
   }
 
   return NextResponse.json({ profile: data });

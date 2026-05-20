@@ -1,4 +1,5 @@
 // Generates or rebuilds a user's daily routine tasks from saved constraints or a day plan.
+import { logRouteError, serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { getTodayDateStringInTimeZone } from "@/lib/date";
@@ -261,7 +262,7 @@ export async function POST(request: Request) {
     const usageLimitEnabled = !isUsageTableMissing;
 
     if (usageFetchError && usageLimitEnabled) {
-      return NextResponse.json({ error: usageFetchError.message }, { status: 500 });
+      return serverErrorResponse("generate-schedule", "USAGE_FETCH_FAILED", usageFetchError);
     }
 
     const usedToday = usageRow?.requests_count ?? 0;
@@ -392,12 +393,11 @@ export async function POST(request: Request) {
       }
 
       if (!tasks) {
-        console.error("All providers failed", providerErrors);
+        logRouteError("generate-schedule", "ALL_PROVIDERS_FAILED", providerErrors.join("; "));
         return NextResponse.json(
           {
             error:
               "All AI providers are currently unavailable. Please try again in a few minutes.",
-            provider_errors: providerErrors,
           },
           { status: 400 },
         );
@@ -413,7 +413,7 @@ export async function POST(request: Request) {
       .eq("schedule_date", scheduleDate);
 
     if (delError) {
-      return NextResponse.json({ error: delError.message }, { status: 500 });
+      return serverErrorResponse("generate-schedule", "DELETE_TASKS_FAILED", delError);
     }
 
     const insertRows = tasks.map((t) => ({
@@ -430,7 +430,7 @@ export async function POST(request: Request) {
     const { error: insError } = await supabase.from("tasks").insert(insertRows);
 
     if (insError) {
-      return NextResponse.json({ error: insError.message }, { status: 500 });
+      return serverErrorResponse("generate-schedule", "INSERT_TASKS_FAILED", insError);
     }
 
     if (usageLimitEnabled) {
@@ -445,7 +445,7 @@ export async function POST(request: Request) {
           { onConflict: "user_id,usage_date" },
         );
       if (usageUpsertError) {
-        return NextResponse.json({ error: usageUpsertError.message }, { status: 500 });
+        return serverErrorResponse("generate-schedule", "USAGE_UPSERT_FAILED", usageUpsertError);
       }
     }
 
@@ -456,14 +456,6 @@ export async function POST(request: Request) {
       auto_filled_title_repairs: autoFilledTitleRepairs,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Internal error";
-    console.error(
-      JSON.stringify({
-        route: "generate-schedule",
-        errorCode: "UNHANDLED",
-        message,
-      }),
-    );
-    return NextResponse.json({ error: message }, { status: 500 });
+    return serverErrorResponse("generate-schedule", "UNHANDLED", e);
   }
 }

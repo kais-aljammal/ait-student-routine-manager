@@ -1,4 +1,5 @@
 // Fetches or deletes routine tasks for an authenticated user's selected date.
+import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { isValidCalendarDate } from "@/lib/utils/date";
 import { NextResponse } from "next/server";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
     .order("starts_at", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverErrorResponse("tasks", "FETCH_FAILED", error);
   }
   return NextResponse.json({ ok: true, tasks: data ?? [] });
 }
@@ -64,7 +65,7 @@ export async function DELETE(request: Request) {
     .eq("schedule_date", scheduleDate);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverErrorResponse("tasks", "DELETE_FAILED", error);
   }
   return NextResponse.json({ ok: true });
 }

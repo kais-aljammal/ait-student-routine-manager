@@ -62,7 +62,14 @@ export async function GET(request: Request) {
   if (latRaw && lonRaw) {
     const lat = Number(latRaw);
     const lon = Number(lonRaw);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      lat < -90 ||
+      lat > 90 ||
+      lon < -180 ||
+      lon > 180
+    ) {
       return NextResponse.json({ error: "Invalid coordinates" }, { status: 400 });
     }
     detected = await fetchTimezoneFromCoordinates(lat, lon);
