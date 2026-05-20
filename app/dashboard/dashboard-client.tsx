@@ -322,7 +322,7 @@ export function DashboardClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ schedule_date: scheduleDate }),
       });
-      const data = await parseApiResponse<{ error?: string; provider_errors?: string[] }>(res);
+      const data = await parseApiResponse<{ error?: string }>(res);
       if (!res.ok) {
         setGenerateError(mapErrorMessage(data.error, res.status, "Failed to generate schedule."));
         return;

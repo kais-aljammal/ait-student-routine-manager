@@ -1,3 +1,4 @@
+import { safeRedirectPath } from "@/lib/api/safe-error";
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -18,7 +19,7 @@ function isLikelyIanaTimeZone(value: string | null): value is string {
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = safeRedirectPath(searchParams.get("next"));
   const tzParam = searchParams.get("tz");
 
   if (code) {

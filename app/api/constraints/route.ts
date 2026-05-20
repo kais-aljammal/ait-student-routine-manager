@@ -1,4 +1,4 @@
-// Returns the authenticated user's saved constraints (life_variables).
+import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -19,7 +19,7 @@ export async function GET() {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverErrorResponse("constraints", "FETCH_FAILED", error);
   }
 
   return NextResponse.json({

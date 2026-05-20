@@ -1,3 +1,4 @@
+import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { getTelegramBotUsername, registerTelegramWebhook } from "@/lib/telegram";
 import { NextResponse } from "next/server";
@@ -61,15 +62,9 @@ export async function POST() {
     .eq("id", user.id);
 
   if (error) {
-    console.error(
-      JSON.stringify({
-        route: "telegram/link",
-        errorCode: "TOKEN_SAVE_FAILED",
-        userId: user.id,
-        message: error.message,
-      }),
-    );
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverErrorResponse("telegram/link", "TOKEN_SAVE_FAILED", error, {
+      userId: user.id,
+    });
   }
 
   return NextResponse.json({
@@ -104,7 +99,7 @@ export async function DELETE() {
     .eq("id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return serverErrorResponse("telegram/link", "DISCONNECT_FAILED", error);
   }
 
   return NextResponse.json({ ok: true });
