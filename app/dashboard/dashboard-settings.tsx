@@ -356,7 +356,7 @@ export function DashboardSettings({
   }
 
   return (
-    <div className="flex flex-col gap-6 max-h-[70vh] overflow-y-auto pr-1">
+    <div className="flex flex-col gap-6 pb-1">
       <section>
         <h3 className="text-sm font-semibold text-blue-100 mb-1">Time &amp; location</h3>
         <p className="text-[11px] text-blue-200/50 mb-3 leading-relaxed">
@@ -396,15 +396,15 @@ export function DashboardSettings({
               />
             </label>
           </div>
-          <p className="text-[11px] text-blue-300/40">
+          <p className="text-xs text-blue-300/70 leading-snug break-words">
             Source: {timezoneSource ?? "auto"} · {formatTimezoneDisplay(timeZone)}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() => void detectBrowserTimezone()}
               disabled={locationLoading}
-              className="rounded-lg border border-blue-900/50 px-3 py-2 text-xs font-medium text-blue-100 hover:bg-slate-800 disabled:opacity-50"
+              className="min-h-10 touch-manipulation rounded-lg border border-blue-900/50 px-3 py-2.5 text-left text-xs font-medium text-blue-100 hover:bg-slate-800 disabled:opacity-50 sm:text-center"
             >
               Use device timezone
             </button>
@@ -412,7 +412,7 @@ export function DashboardSettings({
               type="button"
               onClick={() => void detectFromGeolocation()}
               disabled={locationLoading}
-              className="rounded-lg border border-blue-900/50 px-3 py-2 text-xs font-medium text-blue-100 hover:bg-slate-800 disabled:opacity-50"
+              className="min-h-10 touch-manipulation rounded-lg border border-blue-900/50 px-3 py-2.5 text-left text-xs font-medium text-blue-100 hover:bg-slate-800 disabled:opacity-50 sm:text-center"
             >
               Use my location
             </button>
@@ -420,7 +420,7 @@ export function DashboardSettings({
               type="button"
               onClick={() => void detectFromIp()}
               disabled={locationLoading}
-              className="rounded-lg border border-blue-900/50 px-3 py-2 text-xs font-medium text-blue-100 hover:bg-slate-800 disabled:opacity-50"
+              className="min-h-10 touch-manipulation rounded-lg border border-blue-900/50 px-3 py-2.5 text-left text-xs font-medium text-blue-100 hover:bg-slate-800 disabled:opacity-50 sm:text-center"
             >
               Approximate (IP)
             </button>
@@ -460,7 +460,7 @@ export function DashboardSettings({
               type="button"
               onClick={() => void startTelegramLink()}
               disabled={telegramLoading}
-              className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
+              className="min-h-12 touch-manipulation rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
             >
               {telegramLoading ? "Preparing link…" : "Connect Telegram (one tap)"}
             </button>
@@ -523,7 +523,14 @@ export function DashboardSettings({
           </form>
           {telegramMsg && (
             <p
-              className={`text-xs ${telegramMsg.includes("failed") || telegramMsg.includes("not configured") || telegramMsg.includes("must") ? "text-red-400" : "text-cyan-400"}`}
+              role="alert"
+              className={`text-sm leading-relaxed break-words ${
+                /Missing TELEGRAM|failed|must|Could not|not configured|invalid|expired|denied|Check TELEGRAM|Vercel/i.test(
+                  telegramMsg,
+                )
+                  ? "text-red-300"
+                  : "text-cyan-400"
+              }`}
             >
               {telegramMsg}
             </p>

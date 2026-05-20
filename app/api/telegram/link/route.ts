@@ -19,7 +19,10 @@ export async function POST() {
 
   if (!botToken) {
     return NextResponse.json(
-      { error: "Telegram bot is not configured on the server." },
+      {
+        error:
+          "Missing TELEGRAM_BOT_TOKEN. In Vercel: Project → Settings → Environment Variables → add TELEGRAM_BOT_TOKEN for Production, enable it for Production deploys only if needed → Save → Redeploy.",
+      },
       { status: 503 },
     );
   }
