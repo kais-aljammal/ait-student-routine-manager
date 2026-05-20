@@ -694,19 +694,25 @@ export function DashboardClient({
 
       {/* Settings Modal */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setSettingsOpen(false)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-blue-900/50 bg-slate-900 shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
-            <button 
-              onClick={() => setSettingsOpen(false)}
-              className="absolute right-4 top-4 text-blue-300/50 hover:text-white"
-            >
-              ✕
-            </button>
-            <h2 className="text-lg font-semibold text-white mb-4 pr-6">
-              ⚙️ Settings
-            </h2>
-            <DashboardSettings
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            onClick={() => setSettingsOpen(false)}
+          />
+          <div className="relative mx-auto flex max-h-[min(92dvh,44rem)] w-full flex-col rounded-t-[1.25rem] border-x border-t border-blue-900/50 bg-slate-900 shadow-2xl sm:max-h-[min(85vh,40rem)] sm:max-w-lg sm:rounded-2xl sm:border">
+            <div className="shrink-0 border-b border-blue-900/30 px-5 pb-4 pt-5 sm:px-6 sm:pb-5 sm:pt-6">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                className="absolute right-4 top-4 text-xl leading-none text-blue-300/50 hover:text-white sm:right-5 sm:top-5 touch-manipulation"
+                aria-label="Close settings"
+              >
+                ✕
+              </button>
+              <h2 className="pr-10 text-lg font-semibold text-white">⚙️ Settings</h2>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
+              <DashboardSettings
               initialTimeZone={effectiveTimeZone}
               initialTimezoneSource={effectiveSource}
               initialCity={city}
@@ -718,7 +724,8 @@ export function DashboardClient({
                 setCalendarToday(getTodayDateStringInTimeZone(tz));
               }}
               onTelegramChange={(chatId) => setTelegramChatId(chatId ?? "")}
-            />
+              />
+            </div>
           </div>
         </div>
       )}
