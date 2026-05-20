@@ -1,4 +1,3 @@
-// Updates completion state for a single user-owned task.
 import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";

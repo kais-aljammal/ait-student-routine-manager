@@ -1,4 +1,3 @@
-// Sends Telegram reminders for tasks starting in the next 15 minutes.
 import { serverErrorResponse } from "@/lib/api/safe-error";
 import { formatTimeInTimeZone } from "@/lib/date";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";

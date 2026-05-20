@@ -1,4 +1,4 @@
-# Test /api/send-alerts (loads CRON_SECRET from .env.local if not passed).
+# Smoke-test GET /api/send-alerts. Loads CRON_SECRET from .env.local unless -Secret is set.
 param(
   [string]$BaseUrl = "https://ai-student-routine-manager.vercel.app",
   [string]$Secret = ""

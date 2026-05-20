@@ -1,4 +1,3 @@
-// Returns the authenticated user's saved constraints (life_variables).
 import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";

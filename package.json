@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test \"lib/**/*.test.ts\""
+    "test": "tsx --test \"lib/**/*.test.ts\"",
+    "test:alerts": "powershell -ExecutionPolicy Bypass -File scripts/test-send-alerts.ps1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

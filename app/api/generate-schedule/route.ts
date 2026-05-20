@@ -1,4 +1,3 @@
-// Generates or rebuilds a user's daily routine tasks from saved constraints or a day plan.
 import { logRouteError, serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile";

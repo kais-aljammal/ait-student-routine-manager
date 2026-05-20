@@ -1,4 +1,3 @@
-// Fetches or deletes routine tasks for an authenticated user's selected date.
 import { serverErrorResponse } from "@/lib/api/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { isValidCalendarDate } from "@/lib/utils/date";
