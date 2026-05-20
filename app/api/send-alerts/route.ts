@@ -1,4 +1,5 @@
 // Sends Telegram reminders for tasks starting in the next 15 minutes.
+import { serverErrorResponse } from "@/lib/api/safe-error";
 import { formatTimeInTimeZone } from "@/lib/date";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendTelegramMessage } from "@/lib/telegram";
@@ -46,14 +47,7 @@ export async function GET(request: Request) {
     .eq("completed", false);
 
   if (tasksError) {
-    console.error(
-      JSON.stringify({
-        route: "send-alerts",
-        errorCode: "TASKS_QUERY_FAILED",
-        message: tasksError.message,
-      }),
-    );
-    return NextResponse.json({ error: tasksError.message }, { status: 500 });
+    return serverErrorResponse("send-alerts", "TASKS_QUERY_FAILED", tasksError);
   }
 
   const list = tasks ?? [];
@@ -69,7 +63,7 @@ export async function GET(request: Request) {
     .not("telegram_chat_id", "is", null);
 
   if (profilesError) {
-    return NextResponse.json({ error: profilesError.message }, { status: 500 });
+    return serverErrorResponse("send-alerts", "PROFILES_QUERY_FAILED", profilesError);
   }
 
   const chatByUser = new Map<string, { chatId: string; timeZone: string }>();
